@@ -1,0 +1,110 @@
+// Prisma schema for Gmail Swipe
+// NOTA: no usamos el PrismaAdapter estándar de NextAuth porque necesitamos
+// cifrar nosotros mismos el access/refresh token de Gmail antes de guardarlo.
+// La sesión de NextAuth usa estrategia JWT; estas tablas son nuestro propio
+// almacén de negocio.
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+// Postgres (no SQLite): SQLite es un archivo local y Vercel corre en
+// funciones serverless con filesystem efímero — un archivo .db no
+// sobrevive entre invocaciones ni se comparte entre instancias. Con
+// Postgres (Neon / Vercel Postgres / Supabase, todos tienen capa gratis)
+// funciona igual en local y en producción. `directUrl` es la conexión SIN
+// pooling que necesita Prisma Migrate; `url` puede ser la conexión con
+// pooling (pgbouncer) que usa la app en runtime — ver README "Deploy".
+datasource db {
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
+}
+
+model User {
+  id        String   @id @default(cuid())
+  email     String   @unique
+  name      String?
+  image     String?
+  createdAt DateTime @default(now())
+
+  gmailAccount  GmailAccount?
+  gestureConfig GestureConfig?
+  actionHistory ActionHistory[]
+}
+
+// Tokens OAuth de Gmail del usuario, cifrados en reposo (AES-256-GCM).
+model GmailAccount {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  googleSub String @unique
+  email     String
+
+  encryptedAccessToken  String
+  encryptedRefreshToken String
+  accessTokenExpiresAt  DateTime
+  scope                 String
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Mapeo gesto -> acción de Gmail, configurable por usuario.
+// action: "trash" | "archive" | "keep" | "label"
+model GestureConfig {
+  id     String @id @default(cuid())
+  userId String @unique
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  leftAction  String  @default("trash")
+  leftLabelId String?
+
+  rightAction  String  @default("keep")
+  rightLabelId String?
+
+  upAction  String  @default("archive")
+  upLabelId String?
+
+  downEnabled Boolean @default(false)
+  downAction  String  @default("label")
+  downLabelId String?
+
+  // filterType: "inbox" | "unread" | "label" | "query"
+  filterType    String  @default("inbox")
+  filterLabelId String?
+  filterQuery   String?
+
+  // Cache del id de la etiqueta "Archivar" (se crea una vez en Gmail la
+  // primera vez que se usa el gesto "archive"). Sin este cache había que
+  // pedirle a Gmail la lista completa de etiquetas en CADA archivado, solo
+  // para volver a encontrar la misma — la causa principal de la lentitud.
+  archiveLabelId String?
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// Historial de acciones para permitir deshacer.
+model ActionHistory {
+  id     String @id @default(cuid())
+  userId String
+  user   User   @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  gmailMessageId String
+  gmailThreadId  String?
+
+  gesture    String // "left" | "right" | "up" | "down" | "button-left" | ...
+  actionType String // "trash" | "archive" | "keep" | "label"
+
+  addedLabelIds   String? // JSON array
+  removedLabelIds String? // JSON array
+  wasTrashed      Boolean @default(false)
+
+  undone Boolean @default(false)
+
+  createdAt DateTime @default(now())
+
+  @@index([userId, createdAt])
+}
