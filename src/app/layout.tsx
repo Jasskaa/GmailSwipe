@@ -2,6 +2,7 @@ import type { Metadata, Viewport } from "next";
 import localFont from "next/font/local";
 import "./globals.css";
 import { Providers } from "@/components/Providers";
+import { ServiceWorkerRegister } from "@/components/ServiceWorkerRegister";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -17,6 +18,16 @@ const geistMono = localFont({
 export const metadata: Metadata = {
   title: "Gmail Swipe",
   description: "Triá tu bandeja de Gmail deslizando tarjetas, como en Tinder.",
+  manifest: "/manifest.webmanifest",
+  icons: {
+    icon: "/icon.svg",
+    apple: "/icon.svg",
+  },
+  appleWebApp: {
+    capable: true,
+    statusBarStyle: "default",
+    title: "Gmail Swipe",
+  },
 };
 
 export const viewport: Viewport = {
@@ -39,6 +50,7 @@ export default function RootLayout({
         className={`${geistSans.variable} ${geistMono.variable} antialiased bg-white text-neutral-900 dark:bg-neutral-950 dark:text-neutral-50`}
       >
         <Providers>{children}</Providers>
+        <ServiceWorkerRegister />
       </body>
     </html>
   );
