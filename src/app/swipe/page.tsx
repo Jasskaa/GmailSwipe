@@ -3,8 +3,10 @@ import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getNextEmail, getProgressStats } from "@/lib/gmailMessages";
+import { GmailReauthRequiredError } from "@/lib/gmailAuth";
 import { SwipeScreen } from "@/components/SwipeScreen";
 import { AccountSwitcher } from "@/components/AccountSwitcher";
+import { GmailReauthScreen } from "@/components/GmailReauthScreen";
 
 export default async function SwipePage() {
   const session = await getServerSession(authOptions);
@@ -27,16 +29,26 @@ export default async function SwipePage() {
     create: { userId: session.user.id },
   });
 
-  const [firstEmail, progress] = await Promise.all([
-    getNextEmail(session.user.id).catch((err) => {
-      console.error("Error obteniendo el primer correo:", err);
-      return null;
-    }),
-    getProgressStats(session.user.id).catch((err) => {
-      console.error("Error calculando el progreso inicial:", err);
-      return { reviewed: 0, remaining: 0, total: 0 };
-    }),
-  ]);
+  // Importante: NO se atrapa el error acá y se lo convierte en "sin
+  // correos" — un token de Gmail vencido antes se disfrazaba de "bandeja al
+  // día" (falso) porque el catch devolvía null/0 en silencio. Ahora, si es
+  // específicamente un problema de reautenticación, se muestra la pantalla
+  // real en vez de mentir que la bandeja está vacía.
+  let firstEmail;
+  let progress;
+  try {
+    [firstEmail, progress] = await Promise.all([
+      getNextEmail(session.user.id),
+      getProgressStats(session.user.id),
+    ]);
+  } catch (err) {
+    if (err instanceof GmailReauthRequiredError) {
+      return <GmailReauthScreen email={gmailAccount.email} callbackUrl="/swipe" />;
+    }
+    console.error("Error cargando /swipe:", err);
+    firstEmail = null;
+    progress = { reviewed: 0, remaining: 0, total: 0 };
+  }
 
   return (
     <main className="min-h-screen bg-neutral-50 pb-16 dark:bg-neutral-950">

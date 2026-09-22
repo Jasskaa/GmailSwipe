@@ -2,9 +2,11 @@ import { getServerSession } from "next-auth";
 import { redirect } from "next/navigation";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
-import { listGmailLabels } from "@/lib/gmailApi";
+import { listGmailLabels, type GmailLabel } from "@/lib/gmailApi";
+import { GmailReauthRequiredError } from "@/lib/gmailAuth";
 import { AccountSwitcher } from "@/components/AccountSwitcher";
 import { SignOutLink } from "@/components/SignOutLink";
+import { GmailReauthScreen } from "@/components/GmailReauthScreen";
 import { GestureConfigForm, type GestureConfigValue } from "@/components/GestureConfigForm";
 
 export default async function SetupPage() {
@@ -33,14 +35,22 @@ export default async function SetupPage() {
     );
   }
 
-  const [config, labels] = await Promise.all([
-    prisma.gestureConfig.upsert({
-      where: { userId: session.user.id },
-      update: {},
-      create: { userId: session.user.id },
-    }),
-    listGmailLabels(session.user.id).catch(() => []),
-  ]);
+  let labels: GmailLabel[];
+  try {
+    labels = await listGmailLabels(session.user.id);
+  } catch (err) {
+    if (err instanceof GmailReauthRequiredError) {
+      return <GmailReauthScreen email={gmailAccount.email} callbackUrl="/setup" />;
+    }
+    console.error("Error obteniendo etiquetas de Gmail:", err);
+    labels = [];
+  }
+
+  const config = await prisma.gestureConfig.upsert({
+    where: { userId: session.user.id },
+    update: {},
+    create: { userId: session.user.id },
+  });
 
   const initialConfig: GestureConfigValue = {
     leftAction: config.leftAction as GestureConfigValue["leftAction"],

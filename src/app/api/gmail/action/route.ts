@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGmailClient, getOrCreateArchiveLabelId } from "@/lib/gmailApi";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 const DIRECTIONS = ["left", "right", "up", "down"] as const;
 type Direction = (typeof DIRECTIONS)[number];
@@ -45,13 +46,13 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Ese gesto no está activado." }, { status: 400 });
   }
 
-  const gmail = await getGmailClient(session.user.id);
-
   let wasTrashed = false;
   let addedLabelIds: string[] = [];
   let removedLabelIds: string[] = [];
 
   try {
+    const gmail = await getGmailClient(session.user.id);
+
     switch (resolved.action) {
       case "trash":
         await gmail.users.messages.trash({ userId: "me", id: messageId });
@@ -108,8 +109,7 @@ export async function POST(req: Request) {
         return NextResponse.json({ error: "Acción desconocida." }, { status: 400 });
     }
   } catch (err) {
-    console.error("Error aplicando acción de Gmail:", err);
-    return NextResponse.json({ error: "No se pudo aplicar la acción en Gmail." }, { status: 502 });
+    return gmailErrorResponse(err, "No se pudo aplicar la acción en Gmail.");
   }
 
   await prisma.actionHistory.create({

@@ -3,6 +3,7 @@ import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGmailClient, revertActionHistoryEntry } from "@/lib/gmailApi";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 // Cuántas acciones deshacemos como máximo por request, para no colgar la
 // petición ni pegarle demasiado fuerte a la API de Gmail de una sola vez.
@@ -25,7 +26,13 @@ export async function POST() {
     return NextResponse.json({ ok: true, undoneCount: 0, remaining: 0 });
   }
 
-  const gmail = await getGmailClient(session.user.id);
+  let gmail;
+  try {
+    gmail = await getGmailClient(session.user.id);
+  } catch (err) {
+    return gmailErrorResponse(err, "No se pudo conectar con Gmail.");
+  }
+
   let undoneCount = 0;
   const failures: string[] = [];
 

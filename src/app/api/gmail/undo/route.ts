@@ -4,6 +4,7 @@ import { authOptions } from "@/lib/auth";
 import { prisma } from "@/lib/prisma";
 import { getGmailClient, revertActionHistoryEntry } from "@/lib/gmailApi";
 import { getEmailById } from "@/lib/gmailMessages";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 // Deshace UNA acción (la más reciente sin deshacer) y devuelve la tarjeta
 // del correo revertido para volver a mostrarla. Se puede llamar varias
@@ -24,13 +25,11 @@ export async function POST() {
     return NextResponse.json({ error: "No hay ninguna acción para deshacer." }, { status: 400 });
   }
 
-  const gmail = await getGmailClient(session.user.id);
-
   try {
+    const gmail = await getGmailClient(session.user.id);
     await revertActionHistoryEntry(gmail, last);
   } catch (err) {
-    console.error("Error deshaciendo la acción en Gmail:", err);
-    return NextResponse.json({ error: "No se pudo deshacer la acción en Gmail." }, { status: 502 });
+    return gmailErrorResponse(err, "No se pudo deshacer la acción en Gmail.");
   }
 
   await prisma.actionHistory.update({

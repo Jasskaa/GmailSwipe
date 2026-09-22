@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { listGmailLabels } from "@/lib/gmailApi";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,10 +14,6 @@ export async function GET() {
     const labels = await listGmailLabels(session.user.id);
     return NextResponse.json({ labels });
   } catch (err) {
-    console.error("Error listando labels de Gmail:", err);
-    return NextResponse.json(
-      { error: "No se pudieron obtener las etiquetas de Gmail." },
-      { status: 502 }
-    );
+    return gmailErrorResponse(err, "No se pudieron obtener las etiquetas de Gmail.");
   }
 }

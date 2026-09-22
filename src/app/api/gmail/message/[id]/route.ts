@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getEmailPlainTextBody } from "@/lib/gmailMessages";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 // Devuelve el cuerpo del correo como TEXTO PLANO (nunca HTML) para que el
 // cliente lo renderice como texto sin riesgo de inyectar HTML/JS de un
@@ -16,10 +17,6 @@ export async function GET(_req: Request, { params }: { params: { id: string } })
     const body = await getEmailPlainTextBody(session.user.id, params.id);
     return NextResponse.json({ body });
   } catch (err) {
-    console.error("Error obteniendo el cuerpo del correo:", err);
-    return NextResponse.json(
-      { error: "No se pudo cargar el correo completo." },
-      { status: 502 }
-    );
+    return gmailErrorResponse(err, "No se pudo cargar el correo completo.");
   }
 }

@@ -44,6 +44,11 @@ export function SwipeScreen({
   const [exhausted, setExhausted] = useState(initialEmail === null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  // Si el token de Gmail dejó de servir a mitad de sesión (no solo al
+  // cargar la página), lo marcamos acá para mostrar un aviso claro en vez
+  // de un error genérico — recargar dispara el chequeo del lado servidor,
+  // que ya sabe mostrar la pantalla completa de "reconectar".
+  const [reauthRequired, setReauthRequired] = useState(false);
   const [undoing, setUndoing] = useState(false);
   const [expandedEmail, setExpandedEmail] = useState<SwipeEmail | null>(null);
   const [trigger, setTrigger] = useState<{ direction: Direction; nonce: number } | null>(null);
@@ -101,7 +106,10 @@ export function SwipeScreen({
     fetch(`/api/gmail/next${qs}`)
       .then(async (res) => {
         const data = await res.json();
-        if (!res.ok) throw new Error(data.error ?? "No se pudo obtener el siguiente correo.");
+        if (!res.ok) {
+          if (data.reauthRequired) setReauthRequired(true);
+          throw new Error(data.error ?? "No se pudo obtener el siguiente correo.");
+        }
         if (!data.message) {
           setExhausted(true);
           return;
@@ -156,7 +164,10 @@ export function SwipeScreen({
     })
       .then(async (res) => {
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? "No se pudo aplicar la acción.");
+        if (!res.ok) {
+          if (data.reauthRequired) setReauthRequired(true);
+          throw new Error(data.error ?? "No se pudo aplicar la acción.");
+        }
         refreshProgress();
       })
       .catch((err) => {
@@ -184,7 +195,10 @@ export function SwipeScreen({
     try {
       const res = await fetch("/api/gmail/undo", { method: "POST" });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer.");
+      if (!res.ok) {
+        if (data.reauthRequired) setReauthRequired(true);
+        throw new Error(data.error ?? "No se pudo deshacer.");
+      }
       if (data.email) {
         setCards((prev) => [data.email, ...prev.filter((c) => c.id !== data.email.id)]);
       }
@@ -214,7 +228,10 @@ export function SwipeScreen({
       while (true) {
         const res = await fetch("/api/gmail/undo-all", { method: "POST" });
         const data = await res.json().catch(() => ({}));
-        if (!res.ok) throw new Error(data.error ?? "No se pudo deshacer todo.");
+        if (!res.ok) {
+          if (data.reauthRequired) setReauthRequired(true);
+          throw new Error(data.error ?? "No se pudo deshacer todo.");
+        }
         totalUndone += data.undoneCount ?? 0;
         if (!data.remaining || data.undoneCount === 0) break;
       }
@@ -303,10 +320,22 @@ export function SwipeScreen({
         </div>
       )}
 
-      {error && (
-        <p className="w-full max-w-md rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-400">
-          {error}
-        </p>
+      {reauthRequired ? (
+        <div className="flex w-full max-w-md flex-col items-center gap-2 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-center text-sm text-amber-700 dark:border-amber-900 dark:bg-amber-950/50 dark:text-amber-400">
+          <p>🔒 Tu conexión con Gmail expiró (pasa cada ~7 días en modo &quot;Testing&quot;).</p>
+          <button
+            onClick={() => window.location.reload()}
+            className="rounded-full bg-amber-600 px-4 py-1.5 text-xs font-medium text-white transition hover:bg-amber-500"
+          >
+            Recargar para reconectar
+          </button>
+        </div>
+      ) : (
+        error && (
+          <p className="w-full max-w-md rounded-xl border border-red-200 bg-red-50 px-3 py-2 text-center text-xs text-red-600 dark:border-red-900 dark:bg-red-950/50 dark:text-red-400">
+            {error}
+          </p>
+        )
       )}
       {notice && (
         <p className="w-full max-w-md rounded-xl border border-green-200 bg-green-50 px-3 py-2 text-center text-xs text-green-700 dark:border-green-900 dark:bg-green-950/50 dark:text-green-400">

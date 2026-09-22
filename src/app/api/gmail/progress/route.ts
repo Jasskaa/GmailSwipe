@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getProgressStats } from "@/lib/gmailMessages";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 export async function GET() {
   const session = await getServerSession(authOptions);
@@ -13,7 +14,6 @@ export async function GET() {
     const stats = await getProgressStats(session.user.id);
     return NextResponse.json(stats);
   } catch (err) {
-    console.error("Error calculando el progreso:", err);
-    return NextResponse.json({ error: "No se pudo calcular el progreso." }, { status: 502 });
+    return gmailErrorResponse(err, "No se pudo calcular el progreso.");
   }
 }

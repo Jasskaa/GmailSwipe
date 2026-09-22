@@ -2,6 +2,7 @@ import { NextResponse } from "next/server";
 import { getServerSession } from "next-auth";
 import { authOptions } from "@/lib/auth";
 import { getNextEmail } from "@/lib/gmailMessages";
+import { gmailErrorResponse } from "@/lib/apiErrors";
 
 export async function GET(req: Request) {
   const session = await getServerSession(authOptions);
@@ -17,10 +18,6 @@ export async function GET(req: Request) {
     const message = await getNextEmail(session.user.id, excludeIds);
     return NextResponse.json({ message });
   } catch (err) {
-    console.error("Error obteniendo el siguiente correo:", err);
-    return NextResponse.json(
-      { error: "No se pudo obtener el siguiente correo." },
-      { status: 502 }
-    );
+    return gmailErrorResponse(err, "No se pudo obtener el siguiente correo.");
   }
 }
